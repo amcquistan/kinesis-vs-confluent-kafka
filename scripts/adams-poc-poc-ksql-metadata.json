@@ -1,0 +1,9 @@
+{
+  "id": "lksqlc-7g9vw",
+  "name": "stocks-processor",
+  "kafka": "lkc-nq37z",
+  "endpoint": "https://pksqlc-qrpgm.us-east-1.aws.confluent.cloud:443",
+  "storage": 500,
+  "status": "PROVISIONING",
+  "topic_prefix": "pksqlc-qrpgm"
+}
