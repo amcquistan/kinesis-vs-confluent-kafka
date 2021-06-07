@@ -30,7 +30,7 @@ def send_alert(message: str) -> None:
         sns.publish(
             TopicArn=os.environ['SNS_TOPIC'],
             Message=message,
-            Subject='Lambda Stocks Stream Alert'
+            Subject='Kinesis Lambda Stocks Stream Alert'
         )
     except Exception as e:
         logger.error({

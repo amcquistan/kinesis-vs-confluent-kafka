@@ -1,9 +1,0 @@
-{
-  "id": "lksqlc-qvnym",
-  "name": "stocks-processor",
-  "kafka": "lkc-7g7j2",
-  "endpoint": "https://pksqlc-d91dz.us-east-1.aws.confluent.cloud:443",
-  "storage": 500,
-  "status": "PROVISIONING",
-  "topic_prefix": "pksqlc-d91dz"
-}

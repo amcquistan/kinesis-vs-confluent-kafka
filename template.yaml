@@ -3,8 +3,6 @@ Transform: AWS::Serverless-2016-10-31
 Description: >
   sam-stock-streaming-kinesis-kafka
 
-  Sample SAM Template for sam-stock-streaming-kinesis-kafka
-
 Parameters:
   CreationDate:
     Type: String
@@ -12,44 +10,93 @@ Parameters:
   StocksHost:
     Type: String
   StocksApiKey:
-    Type: 'AWS::SSM::Parameter::Value<String>'
-  TciStocksBucketName:
     Type: String
-    Default: tci-stocks-stream-kinesis-lambda
   StreamName:
     Type: String
-    Default: tci-stocks-stream-kinesis-lambda
+    Default: stocks-stream-kinesis-lambda
   DeliveryStreamName:
     Type: String
-    Default: tci-stocks-stream-kinesis-lambda
+    Default: stocks-raw-stream-kinesis-lambda
   StocksSnsTopicName:
     Type: String
-    Default: tci-stocks-stream-kinesis-lambda
+    Default: stocks-stream-kinesis-lambda
   SnsSubscriptionEmail:
     Type: String
   KafkaBootstrapServer:
     Type: String
   KafkaSaslUsername:
-    Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/confluent/client/key'
+    Type: String
   KafkaSaslPassword:
-    Type: 'AWS::SSM::Parameter::Value<String>'
-    Default: '/confluent/client/secret'
+    Type: String
+  ConfluentSchemaRegistryUrl:
+    Type: String
+  ConfluentSchemaRegistryKey:
+    Type: String
+  ConfluentSchemaRegistrySecret:
+    Type: String
   KafkaTopic:
     Type: String
     Default: stocks
 
 Resources:
-  TciStocksStreamBucket:
+  StocksStreamBucket:
     Type: AWS::S3::Bucket
     Properties: 
       AccessControl: Private
-      BucketName: !Ref TciStocksBucketName
       Tags:
         - Key: Name
           Value: !Sub "${AWS::StackName}-bucket"
         - Key: Created
           Value: !Ref CreationDate
+
+  ConfluentSinkUser:
+    Type: AWS::IAM::User
+    DependsOn: StocksStreamBucket
+    Properties:
+      UserName: ConfluentSinkUser
+      Policies: 
+        - PolicyDocument: {
+            "Version": "2012-10-17",
+            "Statement": [{
+            "Sid": "VisualEditor0",
+            "Effect": "Allow",
+            "Action": [
+                "lambda:InvokeFunction",
+                "lambda:GetFunction",
+                "lambda:InvokeAsync"],
+            "Resource": "*"
+            }, {
+              "Effect":"Allow",
+              "Action":[
+                  "s3:ListAllMyBuckets"
+              ],
+              "Resource":"arn:aws:s3:::*"
+            }, {
+              "Effect":"Allow",
+              "Action":[
+                  "s3:ListBucket",
+                  "s3:GetBucketLocation"
+              ],
+              "Resource": !Sub "arn:aws:s3:::${StocksStreamBucket}"
+            }, {
+              "Effect":"Allow",
+              "Action":[
+                  "s3:PutObject",
+                  "s3:GetObject",
+                  "s3:AbortMultipartUpload",
+                  "s3:ListMultipartUploadParts",
+                  "s3:ListBucketMultipartUploads"
+
+              ],
+              "Resource": !Sub "arn:aws:s3:::${StocksStreamBucket}/*"
+            }]
+          }
+          PolicyName: ConfluentSinkUserPolicy
+
+  ConfluentSinkUserAccessKey:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref ConfluentSinkUser
 
   StockAlertsSnsTopic:
     Type: AWS::SNS::Topic
@@ -63,6 +110,28 @@ Resources:
           Value: !Sub "${AWS::StackName}-sns-topic"
         - Key: Created
           Value: !Ref CreationDate
+
+  SinkConsumerFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: StockAlertsSnsTopic
+    Properties:
+      CodeUri: src/sink_consumer/
+      Handler: app.lambda_handler
+      Runtime: python3.8
+      Timeout: 30
+      MemorySize: 512
+      Environment:
+        Variables:
+          SNS_TOPIC: !Ref StockAlertsSnsTopic
+      Policies:
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt StockAlertsSnsTopic.TopicName
+
+  SinkConsumerFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${SinkConsumerFunction}'
+      RetentionInDays: 3
 
   KinesisStocksStream:
     Type: AWS::Kinesis::Stream
@@ -78,31 +147,32 @@ Resources:
   StocksProducerFunction:
     Type: AWS::Serverless::Function
     DependsOn:
-      - TciStocksStreamBucket
+      - StocksStreamBucket
       - KinesisStocksStream
     Properties:
       CodeUri: src/producer/
       Handler: app.lambda_handler
       Runtime: python3.8
-      Timeout: 59
+      Timeout: 60
       MemorySize: 256
       Environment:
         Variables:
           KINESIS_STREAM: !Ref KinesisStocksStream
-          S3_BUCKET: !Ref TciStocksStreamBucket
+          S3_BUCKET: !Ref StocksStreamBucket
           STOCKS_S3KEY: 'stocks/stocks.json'
           YAHOO_QUOTES_URL: https://apidojo-yahoo-finance-v1.p.rapidapi.com/market/v2/get-quotes
           YAHOO_X_RAPIDAPI_HOST: !Ref StocksHost
           YAHOO_X_RAPIDAPI_KEY: !Ref StocksApiKey
           KAFKA_BOOTSTRAP_SERVER: !Ref KafkaBootstrapServer
-          KAFKA_SECURITY_PROTOCOL: !Ref KafkaSecurityProtocol
-          KAFKA_SASL_MECHANISM: !Ref KafkaSaslMechanism
           KAFKA_SASL_USERNAME: !Ref KafkaSaslUsername
           KAFKA_SASL_PASSWORD: !Ref KafkaSaslPassword
           KAFKA_TOPIC: !Ref KafkaTopic
+          SR_URL: !Ref ConfluentSchemaRegistryUrl
+          SR_KEY: !Ref ConfluentSchemaRegistryKey
+          SR_SECRET: !Ref ConfluentSchemaRegistrySecret
       Policies:
         - S3ReadPolicy:
-            BucketName: !Ref TciStocksStreamBucket
+            BucketName: !Ref StocksStreamBucket
         - KinesisCrudPolicy:
             StreamName: !Ref KinesisStocksStream
       Events:
@@ -120,7 +190,7 @@ Resources:
     Type: AWS::Serverless::Function
     DependsOn:
       - KinesisStocksStream
-      - TciStocksStreamBucket
+      - StocksStreamBucket
       - StockAlertsSnsTopic
     Properties:
       CodeUri: src/processor/
@@ -130,12 +200,12 @@ Resources:
       MemorySize: 512
       Environment:
         Variables:
-          S3_BUCKET: !Ref TciStocksStreamBucket
+          S3_BUCKET: !Ref StocksStreamBucket
           OUTPUT_S3PREFIX: 'lambda-processed-stocks'
           SNS_TOPIC: !Ref StockAlertsSnsTopic
       Policies:
         - S3CrudPolicy:
-            BucketName: !Ref TciStocksStreamBucket
+            BucketName: !Ref StocksStreamBucket
         - SNSPublishMessagePolicy:
             TopicName: !GetAtt StockAlertsSnsTopic.TopicName
       Events:
@@ -156,7 +226,7 @@ Resources:
   DeliveryStreamRole:
     Type: AWS::IAM::Role
     DependsOn:
-      - TciStocksStreamBucket
+      - StocksStreamBucket
       - KinesisStocksStream
     Properties:
       AssumeRolePolicyDocument:
@@ -187,14 +257,14 @@ Resources:
                   - "kinesis:GetShardIterator"
                   - "kinesis:GetRecords"
                 Resource:
-                  - !Sub "arn:aws:s3:::${TciStocksStreamBucket}"
-                  - !Sub "arn:aws:s3:::${TciStocksStreamBucket}/*"
+                  - !Sub "arn:aws:s3:::${StocksStreamBucket}"
+                  - !Sub "arn:aws:s3:::${StocksStreamBucket}/*"
                   - !GetAtt KinesisStocksStream.Arn
 
   StocksDeliveryStream:
     Type: AWS::KinesisFirehose::DeliveryStream
     DependsOn:
-      - TciStocksStreamBucket
+      - StocksStreamBucket
       - KinesisStocksStream
       - DeliveryStreamRole
     Properties:
@@ -204,13 +274,13 @@ Resources:
         KinesisStreamARN: !GetAtt KinesisStocksStream.Arn
         RoleArn: !GetAtt DeliveryStreamRole.Arn
       ExtendedS3DestinationConfiguration:
-        BucketARN: !GetAtt TciStocksStreamBucket.Arn
+        BucketARN: !GetAtt StocksStreamBucket.Arn
         BufferingHints:
           IntervalInSeconds: 120
           SizeInMBs: 50
         CompressionFormat: GZIP
-        Prefix: stocks-raw/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/
-        ErrorOutputPrefix: stocks-raw-errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/
+        Prefix: kinesis-stocks-raw/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/
+        ErrorOutputPrefix: kinesis-stocks-raw-errors/!{firehose:error-output-type}/year=!{timestamp:yyyy}/month=!{timestamp:MM}/day=!{timestamp:dd}/hour=!{timestamp:HH}/
         RoleARN: !GetAtt DeliveryStreamRole.Arn
       Tags:
         - Key: Name
@@ -221,3 +291,11 @@ Resources:
 Outputs:
   StockAlertsSnsTopic:
     Value: !Ref StockAlertsSnsTopic
+  StocksStreamBucket:
+    Value: !Ref StocksStreamBucket
+  ConfluentSinkUserAccessKey:
+    Value: !Ref ConfluentSinkUserAccessKey
+  ConfluentSinkUserSecret:
+    Value: !GetAtt ConfluentSinkUserAccessKey.SecretAccessKey
+  SinkConsumerFunction:
+    Value: !Ref SinkConsumerFunction

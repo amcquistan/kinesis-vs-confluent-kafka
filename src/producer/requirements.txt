@@ -1,4 +1,5 @@
 boto3
 requests
 python-dateutil
-confluent-kafka
+confluent-kafka[avro]
+fastavro

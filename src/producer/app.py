@@ -6,7 +6,10 @@ import time
 
 import boto3
 import requests
-from confluent_kafka import Producer, KafkaError
+from confluent_kafka import SerializingProducer, KafkaError
+from confluent_kafka.serialization import StringSerializer
+from confluent_kafka.schema_registry import SchemaRegistryClient
+from confluent_kafka.schema_registry.avro import AvroSerializer
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -14,28 +17,58 @@ logger.setLevel(logging.INFO)
 s3 = boto3.client('s3')
 kinesis = boto3.client('kinesis')
 
-UTC_OPEN = datetime.time(14, 30, tzinfo=datetime.timezone.utc)
-UTC_CLOSE = datetime.time(21, 00, tzinfo=datetime.timezone.utc)
+UTC_OPEN = datetime.time(12, 00, tzinfo=datetime.timezone.utc)
+UTC_CLOSE = datetime.time(23, 00, tzinfo=datetime.timezone.utc)
 
+
+STOCK_QUOTE_SCHEMA = """
+  {
+    "namespace": "com.intrado.stockdemo",
+    "name": "StockQuote",
+    "type": "record",
+    "fields": [
+      {"name":"symbol",         "type":"string"},
+      {"name":"short_name",     "type":["null", "string"], "default": null},
+      {"name":"market_time",    "type":"long"},
+      {"name":"quote_source",   "type":["null", "string"], "default": null},
+      {"name":"current",        "type":"double"},
+      {"name":"low_day",        "type":"double"},
+      {"name":"high_day",       "type":"double"},
+      {"name":"open",           "type":["null", "double"], "default": null},
+      {"name":"previous_close", "type":["null", "double"], "default": null},
+      {"name":"low_52wk",       "type":["null", "double"], "default": null},
+      {"name":"high_52wk",      "type":["null", "double"], "default": null}
+    ]
+  }
+"""
 
 def encode_record(record: dict) -> bytes:
     bytes_data = json.dumps(record).encode('utf-8')
     return bytes_data
 
 
-def kafka_ack(err, msg):
-    if err:
-        logger.error({
-            'message': 'failed to deliver message',
-            'error': str(err)
-        })
-    else:
-        logger.info({
-            'message': 'successfully produced message',
-            'topic': msg.topic(),
-            'partition': msg.partition(),
-            'offset': msg.offset()
-        })
+class AckCallback:
+    def __init__(self, key, value):
+        self.key = key
+        self.value = value
+    
+    def __call__(self, err, msg):
+        if err:
+            logger.error({
+                'message': 'failed to deliver message to Kafka',
+                'error': str(err),
+                'key': self.key,
+                'value': self.value
+            })
+        else:
+            logger.info({
+                'message': 'successfully produced message to Kafka',
+                'topic': msg.topic(),
+                'partition': msg.partition(),
+                'offset': msg.offset(),
+                'key': self.key,
+                'value': self.value
+            })
 
 
 def lambda_handler(event, context):
@@ -45,32 +78,38 @@ def lambda_handler(event, context):
         logger.info({'message': 'Exiting early, {} not during market hours {} - {}'.format(utc_now, UTC_OPEN, UTC_CLOSE)})
         return
 
-    try:
-        obj = s3.get_object(Bucket=os.environ['S3_BUCKET'], Key=os.environ['STOCKS_S3KEY'])
-        stocks = json.loads(obj['Body'].read().decode('utf-8'))
-    except Exception as e:
-        logger.error({'error': 'failed_s3_download', 'exception': str(e)})
-        raise e
-
     headers = {
       'x-rapidapi-key': os.environ['YAHOO_X_RAPIDAPI_KEY'],
       'x-rapidapi-host': os.environ['YAHOO_X_RAPIDAPI_HOST']
     }
     query_params = {
         'region': 'US',
-        'symbols': ','.join(s for s in stocks['symbols'])
+        'symbols': 'AMZN,MSFT,AAPL,NEOG,BOX,NNI'
     }
     logger.info({'action': 'fetching_stocks', 'details': query_params})
 
-    kafka_producer = Producer({
-        'bootstrap.servers': os.environ['KAFKA_BOOTSTRAP_SERVER'],
-        'security.protocol': 'SASL_SSL',
-        'sasl.mechanism': 'PLAIN',
-        'sasl.username': os.environ['KAFKA_SASL_USERNAME'],
-        'sasl.password': os.environ['KAFKA_SASL_PASSWORD'],
-        'partitioner': 'murmur2_random',
-        'linger.ms': 100
-    })
+    sr_conf = {
+      'url': os.environ['SR_URL'],
+      'basic.auth.user.info': "{}:{}".format(os.environ['SR_KEY'], os.environ['SR_SECRET'])
+    }
+    sr_client = SchemaRegistryClient(sr_conf)
+
+    key_serializer = StringSerializer()
+    value_serializer = AvroSerializer(schema_registry_client=sr_client,
+                                      schema_str=STOCK_QUOTE_SCHEMA)
+
+    producer_conf = {
+      'bootstrap.servers': os.environ['KAFKA_BOOTSTRAP_SERVER'],
+      'key.serializer': key_serializer,
+      'value.serializer': value_serializer,
+      'security.protocol': 'SASL_SSL',
+      'sasl.mechanism': 'PLAIN',
+      'sasl.username': os.environ['KAFKA_SASL_USERNAME'],
+      'sasl.password': os.environ['KAFKA_SASL_PASSWORD'],
+      'partitioner': 'murmur2_random',
+      'linger.ms': 100
+    }
+    kafka_producer = SerializingProducer(producer_conf)
 
     for _ in range(5):
         try:
@@ -104,8 +143,8 @@ def lambda_handler(event, context):
             try:
                 kafka_producer.produce(os.environ['KAFKA_TOPIC'],
                                     key=record_key,
-                                    value=json.dumps(record_value),
-                                    on_delivery=kafka_ack)
+                                    value=record_value,
+                                    on_delivery=AckCallback(record_key, record_value))
             except KafkaError as e:
                 logger.error({'action': 'kafka_produce', 'exception': str(e)})
 
@@ -116,8 +155,8 @@ def lambda_handler(event, context):
             logger.error({'error': 'failed_kinesis_fetch', 'exception': str(e)})
             raise e
 
-        kafka_producer.poll(1)
-        time.sleep(5)
+        kafka_producer.poll(0)
+        time.sleep(10)
 
     kafka_producer.flush()
     logger.info({'action': 'stock_producer_complete'})
