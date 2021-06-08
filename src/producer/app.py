@@ -156,7 +156,7 @@ def lambda_handler(event, context):
             raise e
 
         kafka_producer.poll(0)
-        time.sleep(10)
+        time.sleep(9)
 
     kafka_producer.flush()
     logger.info({'action': 'stock_producer_complete'})

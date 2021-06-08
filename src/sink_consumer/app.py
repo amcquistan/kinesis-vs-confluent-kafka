@@ -36,17 +36,16 @@ def lambda_handler(events, context):
         high = stock_highlow['END_HIGH']
         messages.append(f"{symbol} has {desc} between {low} and {high} and latest price ${price}")
 
-    logger.info({'messages': messages})
-
     # send email via SNS topic
-    sns = boto3.client('sns')
     msg = '\n'.join(messages)
     try:
-        sns.publish(
-            TopicArn=os.environ['SNS_TOPIC'],
-            Message=msg,
-            Subject='Kafka Lambda Stocks Stream Alert'
-        )
+        logger.info({'message': msg})
+        # sns = boto3.client('sns')
+        # sns.publish(
+        #     TopicArn=os.environ['SNS_TOPIC'],
+        #     Message=msg,
+        #     Subject='Kafka Lambda Stocks Stream Alert'
+        # )
     except Exception as e:
         logger.error({
             'error': 'failed_sns_publish',

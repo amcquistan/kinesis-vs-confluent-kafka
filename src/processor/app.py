@@ -25,13 +25,13 @@ def decode_record(record: bytes) -> dict:
 
 
 def send_alert(message: str) -> None:
-    logger.info({'action': 'send_stock_alert', 'alert_message': message})
     try:
-        sns.publish(
-            TopicArn=os.environ['SNS_TOPIC'],
-            Message=message,
-            Subject='Kinesis Lambda Stocks Stream Alert'
-        )
+        logger.info({'action': 'send_stock_alert', 'alert_message': message})
+        # sns.publish(
+        #     TopicArn=os.environ['SNS_TOPIC'],
+        #     Message=message,
+        #     Subject='Kinesis Lambda Stocks Stream Alert'
+        # )
     except Exception as e:
         logger.error({
             'error': 'failed_sns_publish',

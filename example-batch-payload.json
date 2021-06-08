@@ -1,0 +1,67 @@
+[
+  {
+    "symbol": "MSFT",
+    "short_name": "Microsoft Corporation",
+    "market_time": 1617910698,
+    "quote_source": "Nasdaq Real Time Price",
+    "current": 253.2,
+    "low_day": 252.0,
+    "high_day": 254.139,
+    "open": 252.77,
+    "previous_close": 249.9,
+    "low_52wk": 162.3,
+    "high_52wk": 254.139
+  },
+  {
+    "symbol": "AAPL",
+    "short_name": "Apple Inc.",
+    "market_time": 1617910697,
+    "quote_source": "Nasdaq Real Time Price",
+    "current": 129.9792,
+    "low_day": 128.52,
+    "high_day": 130.39,
+    "open": 128.95,
+    "previous_close": 127.9,
+    "low_52wk": 66.175,
+    "high_52wk": 145.09
+  },
+  {
+    "symbol": "BOX",
+    "short_name": "Box, Inc.",
+    "market_time": 1617910698,
+    "quote_source": "Nasdaq Real Time Price",
+    "current": 21.945,
+    "low_day": 21.16,
+    "high_day": 22.61,
+    "open": 21.85,
+    "previous_close": 24.27,
+    "low_52wk": 14.79,
+    "high_52wk": 26.47
+  },
+  {
+    "symbol": "NNI",
+    "short_name": "Nelnet, Inc.",
+    "market_time": 1617910657,
+    "quote_source": "Nasdaq Real Time Price",
+    "current": 75.29,
+    "low_day": 73.605,
+    "high_day": 75.31,
+    "open": 74.14,
+    "previous_close": 73.63,
+    "low_52wk": 40.77,
+    "high_52wk": 78.36
+  },
+  {
+    "symbol": "MSFT",
+    "short_name": "Microsoft Corporation",
+    "market_time": 1617910699,
+    "quote_source": "Nasdaq Real Time Price",
+    "current": 253.2,
+    "low_day": 252.0,
+    "high_day": 254.139,
+    "open": 252.77,
+    "previous_close": 249.9,
+    "low_52wk": 162.3,
+    "high_52wk": 254.139
+  }
+]
