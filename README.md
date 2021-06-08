@@ -143,7 +143,7 @@ ccloud ksql app configure-acls $KSQL_ID '*'
 ```
 KSQLCLI_CREDS_FILE=configs/ksql-creds.json
 ccloud api-key create --resource $KSQL_ID -o json > $KSQLCLI_CREDS_FILE
-ccloud ksql app configure-acls $KSQL_ID '*'
+ccloud ksql app configure-acls $KSQL_ID '*' ALL
 ```
 
 These API Key/Secret creds are needed to connect to ksqlDB from ksqldb-cli 

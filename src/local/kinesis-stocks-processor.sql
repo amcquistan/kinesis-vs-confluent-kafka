@@ -1,13 +1,12 @@
 
 -- ** Multi-step application **
--- Use parallel / serial processing steps.
 -- Intermediate, in-application streams are useful for building multi-step applications.
  
---          .------------------.   .-------------------.    .--------------------.              
---          |                  |   |                   |    |                    |              
--- Source-->| STOCK_AGG_STREAM |-->| STOCK_PREV_STREAM |--> | DESTINATION_STREAM |-->Destination
---          |                  |   |                   |    |                    |              
---          '------------------'   '-------------------'    '--------------------'               
+--          .-----------------------.   .--------------------.                  
+--          |                       |   |                    |                  
+-- Source-->| STOCKS_WINDOWS_STREAM |-->| STOCKS_HIGHLOW_CHG |-->Destination
+--          |                       |   |                    |              
+--          '-----------------------'   '--------------------'               
 -- STREAM (in-application): a continuously updated entity that you can SELECT from and INSERT into like a TABLE
 -- PUMP: an entity used to continuously 'SELECT ... FROM' a source STREAM, and INSERT SQL results into an output STREAM
  
