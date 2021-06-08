@@ -1,3 +1,13 @@
+-- ** Multi-step application of both Tables and Streams **
+-- Intermediate, in-application streams are useful for building multi-step applications.
+--                .-----------------.   .-------------------.    .---------------.    .-------------------.          
+--                |                 |   |                   |    |               |    |                   |        
+-- stocks topic-->|  STOCKS_STREAM  |-->| STOCK_HIGHLOW_TBL |--> | STOCK_WINDOWS |--> | STOCK_HIGHLOW_CHG |--> stock_highlow_chg topic
+--   (Producer)   |                 |   |                   |    |               |    |                   |      (Consumer)
+--                '-----------------'   '-------------------'    '---------------'    '-------------------'       
+-- STREAM: A partitioned, immutable, append-only collection that represents a series of historical facts
+-- TABLE: A mutable, partitioned collection that models changes over time, specifically showing the state of thing right now
+
 CREATE STREAM STOCKS_STREAM WITH (
     KAFKA_TOPIC='stocks',
     VALUE_FORMAT='AVRO'
