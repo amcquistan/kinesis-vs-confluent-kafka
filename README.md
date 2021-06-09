@@ -200,8 +200,8 @@ Create a JSON based config file for the Connector with the following. The output
    "s3.compression.level": "6",
    "s3.bucket.name": "<my-bucket-name>",
    "time.interval" : "HOURLY",
-   "flush.size": "100",
-   "tasks.max" : "1"
+   "flush.size": "1000",
+   "tasks.max" : "1",
    "topics": "stocks",
    "topics.dir": "stocks-raw-kafka-stream"
 }
@@ -210,7 +210,7 @@ Create a JSON based config file for the Connector with the following. The output
 The following ccloud command launches the connector
 
 ```
-
+ccloud connector create --config configs/s3-sink-connector.json --cluster $CLUSTER_ID
 ```
 
 3) Launch the kqlDB Processing Queries
